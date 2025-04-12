@@ -10,13 +10,16 @@ client_sockets = {}
 server_socket = None
 server_ready_event = threading.Event()  # Event to signal when the server is ready
 
+# Handles incoming messages from a client
 def handle_client(client_socket, addr):
-    """Handles incoming messages from a client."""
     while True:
         try:
             message = client_socket.recv(1024).decode('utf-8')
             if message:
-                print(f"Message received from {addr}: {message}")
+                print(f"\nMessage received from {addr[0]}")
+                print(f"Sender’s Port: {addr[1]}")
+                print(f"Message: “{message}”")
+                print("Enter command: ", end="", flush=True)
                 broadcast(message, client_socket)
             else:
                 break
@@ -26,8 +29,8 @@ def handle_client(client_socket, addr):
     client_socket.close()
     remove_connection(client_socket)
 
+# Sends a message to all connected clients except the sender
 def broadcast(message, sender_socket):
-    """Sends a message to all connected clients except the sender."""
     with lock:
         for client in connections:
             if client != sender_socket:
@@ -37,14 +40,14 @@ def broadcast(message, sender_socket):
                     client.close()
                     remove_connection(client)
 
+# Removes a client from the connections list
 def remove_connection(client_socket):
-    """Removes a client from the connections list."""
     with lock:
         if client_socket in connections:
             del connections[client_socket]
 
+# Starts the server to listen for incoming connections
 def start_server(port):
-    """Starts the server to listen for incoming connections."""
     global server_socket
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server_socket.bind(('', port))
@@ -58,21 +61,27 @@ def start_server(port):
         connections[client_socket] = addr
         threading.Thread(target=handle_client, args=(client_socket, addr)).start()
 
+# Returns the IP address of the machine
 def my_ip():
-    """Returns the IP address of the machine."""
     hostname = socket.gethostname()
     ip_address = socket.gethostbyname(hostname)
     return ip_address
 
+# Returns the port on which the server is listening
 def my_port():
-    """Returns the port on which the server is listening."""
     return server_socket.getsockname()[1]
 
+# Establishes a new TCP connection to the specified destination
 def connect(destination, port):
-    """Establishes a new TCP connection to the specified destination."""
     try:
         ipaddress.ip_address(destination)  # Validate IP address
         port = int(port)
+
+        # Check if trying to connect to self
+        if destination == my_ip() and port == my_port():
+            print("Error: Cannot connect to yourself.")
+            return
+
         if (destination, port) in client_sockets.values():
             print("Error: Duplicate connection.")
             return
@@ -88,14 +97,17 @@ def connect(destination, port):
     except Exception as e:
         print(f"Error: {e}")
 
+# Displays a list of all active connections
 def list_connections():
-    """Displays a list of all active connections."""
-    print("Active connections:")
-    for idx, (sock, addr) in enumerate(connections.items()):
-        print(f"{idx + 1}: {addr[0]} {addr[1]}")
+    if not connections:
+        print("No active connections.")
+    else:
+        print("Active connections:")
+        for idx, (sock, addr) in enumerate(connections.items()):
+            print(f"{idx + 1}: {addr[0]} {addr[1]}")
 
+# Terminates the specified connection
 def terminate(connection_id):
-    """Terminates the specified connection."""
     try:
         connection_id = int(connection_id) - 1
         sock = list(connections.keys())[connection_id]
@@ -105,8 +117,8 @@ def terminate(connection_id):
     except (IndexError, ValueError):
         print("Error: Invalid connection ID.")
 
+# Sends a message to the specified connection
 def send_message(connection_id, message):
-    """Sends a message to the specified connection."""
     try:
         connection_id = int(connection_id) - 1
         sock = list(connections.keys())[connection_id]
@@ -115,8 +127,8 @@ def send_message(connection_id, message):
     except (IndexError, ValueError):
         print("Error: Invalid connection ID.")
 
+# Handles user commands
 def command_interface():
-    """Handles user commands."""
     # Wait until the server is ready
     server_ready_event.wait()
 
